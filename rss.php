@@ -31,8 +31,8 @@ echo '<?xml version="1.0" encoding="UTF-8"?>';
     <description>Take a look at some of FeedForAll&apos;s favorite software and resources for learning more about RSS.</description>
     <link>https://github.com/borazslo/OSM-Overpass-Diff</link>
     <language>en-us</language>
-    <lastBuildDate><?php echo date('D, j M Y H:i:s +0200') ?></lastBuildDate>
-    <pubDate><?php echo date('D, j M Y H:i:s +0200') ?></pubDate>
+    <lastBuildDate><?php echo date('D, j M Y H:i:s') ?></lastBuildDate>
+    <pubDate><?php echo date('D, j M Y H:i:s') ?></pubDate>
     <generator>OSM Overpass Diff</generator>
 <?php
 	foreach($rows as $row) {

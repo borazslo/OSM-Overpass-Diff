@@ -1,5 +1,6 @@
 <?php
 
+date_default_timezone_set('UTC');
 
 /**
  * 
@@ -8,8 +9,9 @@
  	
  	function __construct()
  	{
- 		$this->interpreter = "http://overpass-api.de/api/interpreter";
- 		$this->timeout = 25;
+ 		$this->apiurl = "http://overpass-api.de/api/";
+ 		$this->interpreter = $this->apiurl."interpreter";
+ 		$this->timeout = 255;
  		$this->format = 'xml'; /* xml, json, array */
  		//$this->areaid; http://wiki.openstreetmap.org/wiki/Overpass_turbo/Extended_Overpass_Queries
  		$this->dateOld = date("Y-m-d\TH:00:00\Z",strtotime("-1 week"));
@@ -37,10 +39,14 @@
 
  	}
  	function runQuery($query = false) {
+
  		if($query == false) {
  			$query = $this->query;
  		} 
- 		if($query == '') return false;
+ 		if($query == '') {
+ 			$this->lasterror = 'There was no code to build the query upon that.';
+ 			return false;
+ 		}
 
 	    $obj = false;
 	    $query = str_replace(PHP_EOL, '', $query);
@@ -52,23 +58,69 @@
 
 	    if(file_exists($dir."osm_".md5($query))) {
 	        $result = file_get_contents($dir."osm_".md5($query)); 
-	    } else {        
-	        $result = @file_get_contents($url);
-	        if (strpos($http_response_header[0], "400")) {
-	        	return false;
+	    } else {
+	    	if(!file_exists($dir."tmp_".md5($query))) {
+	    		file_put_contents($dir."tmp_".md5($query),time());
+	    	} else {
+	    		$time = file_get_contents($dir."tmp_".md5($query));
+
+	    		if($time + $this->timeout < time() + 1 ) {
+		    		file_put_contents($dir."tmp_".md5($query),time());
+	    		} else {
+	    			//echo date('H:i:s')."<br/>";
+	    			sleep(1);
+	    			return $this->runQuery(urldecode($query));
+	    		}
+	    	}
+
+	        $curl_handle=curl_init();
+			curl_setopt($curl_handle, CURLOPT_URL,$url);
+			curl_setopt($curl_handle, CURLOPT_CONNECTTIMEOUT, 2);
+			curl_setopt($curl_handle, CURLOPT_RETURNTRANSFER, 1);
+			curl_setopt($curl_handle, CURLOPT_USERAGENT, 'OverpassDiff');
+		    curl_setopt($curl_handle, CURLOPT_SSL_VERIFYPEER, false );    # required for https urls
+			$result = curl_exec($curl_handle);
+		    $response = curl_getinfo( $curl_handle );
+			curl_close($curl_handle);
+
+        	unlink($dir."tmp_".md5($query));
+			//print_r($response);
+	        
+	        //http://overpass-api.de/command_line.html
+	        if ($response['http_code'] == "400" ) { 
+	        	$this->lasterror = "Bad Request: Error in the query.";
+	        	return false; 
 	        }
-	        elseif (strpos($http_response_header[0], "200")) { 
-   				
+	        elseif ($response['http_code'] == "429" ) { 
+	        	//429 Too Many Requests
+	        	file_get_contents($this->apiurl."kill_my_queries");
+	        	$this->lasterror = "Too Many Requests."	;      	
+	        	return $this->runQuery($query);	        	
+	        }
+	        elseif ($response['http_code'] == "504" ) { 
+	        	$this->lasterror = "Gateway Timeout. ".$this->apiurl;
+	        	return false; 
+	        }
+	        elseif ($response['http_code'] == "200" ) {
+
 			} else { 
+	        	$this->lasterror = "Error! HTTP Code: ".$response['http_code'];	        	
+
    				return false;
 			}
-	        file_put_contents($dir."osm_".md5($query), $result);         
+	        if($result != '') {
+	        	file_put_contents($dir."osm_".md5($query), $result);
+	        }
 	    }
-
 	    $this->resultRaw = $result;
 	    $this->resultXML = simplexml_load_string($result);
 	    $this->resultJSON = json_encode($this->resultXML);
-	    $this->resultArray = json_encode($this->resultJSON);
+	    $this->resultArray = (array) json_decode($this->resultJSON);
+
+	    if(isset($this->resultArray['remark'])) {
+	    	$this->lasterror = $this->resultArray['remark'];
+	    	return false;
+	    }
 	    
 	    switch ($this->format) {
 	    	case 'xml':

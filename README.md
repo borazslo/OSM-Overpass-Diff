@@ -13,7 +13,7 @@ It saves the result of every Overpass Query.
 
 ##Variables
 - __dateOld__ & __dateNew__
- - The dates for the base of the comparsion.
+ - The __UTC__ datetimes for the base of the comparsion.
  - It can be in any format recognizeble by [`strtotime()`](http://php.net/manual/en/function.strtotime.php). For example: `2015-12-24 18:00:00` or `-1 month`.
  - Default: from `-1 week` to the beginning of the current hour = `date('Y-m-d H:00:00')`.
 - __timeout__
