@@ -10,26 +10,61 @@ echo "<h1>OSM Diff</h1>";
 include 'OverpassDiff.php';
 
 $overpass = new OverpassDiff();
-$overpass->areaid = 3600021335;
 
+if(isset($_REQUEST['timeout']))
+	$overpass->timeout = (int) $_REQUEST['timeout'];
 if(isset($_REQUEST['dateOld']))
-	$overpass->dateOld = strtotime($_REQUEST['dateOld']);
+	$overpass->dateOld = date("Y-m-d\TH:00:00\Z",strtotime($_REQUEST['dateOld']));
 if(isset($_REQUEST['dateNew']))
-	$overpass->dateNew = strtotime($_REQUEST['dateNew']);
-
-$query = '(
+	$overpass->dateNew = date("Y-m-d\TH:00:00\Z",strtotime($_REQUEST['dateNew']));
+if(isset($_REQUEST['code'])) 
+	$overpass->code = $_REQUEST['code'];
+else {
+	$codes = array(
+	 '{{geocodeArea:Hungary}}->.searchArea;
+(
 node["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"catholic"](area.searchArea);
 way["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"catholic"](area.searchArea);
 relation["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"catholic"](area.searchArea);
-);';
+);',
+	'{{geocodeArea:Hungary}}->.searchArea;
+(
+node["wheelchair"](area.searchArea);
+way["wheelchair"](area.searchArea);
+relation["wheelchair"](area.searchArea);
+);',
+);
+	$overpass->code = $codes[rand(0,1)];
+}
+
 
 echo "<pre>";
-$overpass->buildQuery($query);
-$overpass->runQuery();
-$rows = $overpass->diff();
+if($overpass->buildQuery()) {
+	if($overpass->runQuery()) {
+		$rows = $overpass->diff();
+	} else {
+		echo "We could not recieve good answer from overpass api.";
+		$rows = array();
+	}
+} else {
+	echo "We could not build the Query. Sorry.";
+	$rows = array();
+}
 echo "</pre>";
 
-echo "<strong>Query:</strong><pre>".$overpass->query."</pre>";
+echo "<div style='float:left;width:49%'>";
+	echo "<form action='".$_SERVER['PHP_SELF']."' method='get'>";
+	echo "dateOld: <input name='dateOld' type='text' size='20' value='".$overpass->dateOld."'>; ";
+	echo "dateNew: <input name='dateNew' type='text' size='20' value='".$overpass->dateNew."'><br/>";
+	echo "<textarea name='code' style='width:100%;height:150px;margin-top:4px;margin-bottom:4px;font-size:13px'>".$overpass->code."</textarea>";
+	echo "timeout: <input name='timeout' type='text' size='4' value='".$overpass->timeout."'>; ";
+	echo "<button style='float:right'>Run</button>";
+
+	echo "</form>";
+echo" </div>";
+
+echo "<div style='float:right;width:49%;margin:5px;padding:5px;overflow:auto;background-color:rgba(0,0,0,0.1)'><pre>".$overpass->query."</pre></div>";
+
 
 echo "<table width='100%' border='1'>";
 echo "<tr>
@@ -68,8 +103,11 @@ foreach($rows as $row) {
 }
 
 echo "</table>";
-echo "<br/>".(string) $overpass->resultXML->note;
-echo "<br/>Generated with ".$overpass->resultXML['generator']." ".$overpass->resultXML['version'];
+if(isset($overpass->resultXML)) {
+	echo "<br/>".(string) $overpass->resultXML->note;
+	echo "<br/>Generated with ".$overpass->resultXML['generator']." ".$overpass->resultXML['version'];
+}
+
 
 
 ?>

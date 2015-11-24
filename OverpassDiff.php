@@ -9,24 +9,29 @@
  	function __construct()
  	{
  		$this->interpreter = "http://overpass-api.de/api/interpreter";
- 		$this->timeout = 255;
+ 		$this->timeout = 25;
  		$this->format = 'xml'; /* xml, json, array */
  		//$this->areaid; http://wiki.openstreetmap.org/wiki/Overpass_turbo/Extended_Overpass_Queries
  		$this->dateOld = date("Y-m-d\TH:00:00\Z",strtotime("-1 week"));
  		$this->dateNew = date("Y-m-d\TH:00:00\Z");
  	}
 
- 	function buildQuery($query) {
+ 	function buildQuery($code = false) {
+ 		if($code == false)
+ 			$code = $this->code;
+
  		if(isset($this->date)) {
  			$this->dateOld = $this->date;
  			$this->dateNew = time();
  		}
+
  		$return  = '[timeout:'.$this->timeout.']'."\n";
  		$return .= '[adiff:"'.date("Y-m-d\TH:i:00\Z",strtotime($this->dateOld)).'","'.date("Y-m-d\TH:i:00\Z",strtotime($this->dateNew)).'"];'."\n";
-		if(!isset($this->areaid)) return false;
-		$return .= 'area('.$this->areaid.')->.searchArea;';
-		$return .= $query;
-		$return .= "out body meta;\n>;\nout meta skel qt;";
+		$return .= $code;
+		$return .= "\nout body meta;\n>;\nout meta skel qt;";
+
+		$return = $this->replaceShortcuts($return);
+
 		$this->query = $return;
 		return $return;
 
@@ -39,6 +44,7 @@
 
 	    $obj = false;
 	    $query = str_replace(PHP_EOL, '', $query);
+	    $query = str_replace('/ /', '', $query);
 	    $query = urlencode($query);
 	    $url = $this->interpreter."?data=".$query;
 	    $dir = 'tmp/';
@@ -47,7 +53,15 @@
 	    if(file_exists($dir."osm_".md5($query))) {
 	        $result = file_get_contents($dir."osm_".md5($query)); 
 	    } else {        
-	        $result = file_get_contents($url);
+	        $result = @file_get_contents($url);
+	        if (strpos($http_response_header[0], "400")) {
+	        	return false;
+	        }
+	        elseif (strpos($http_response_header[0], "200")) { 
+   				
+			} else { 
+   				return false;
+			}
 	        file_put_contents($dir."osm_".md5($query), $result);         
 	    }
 
@@ -198,10 +212,57 @@
 					$return[$key] = array('added',$value);
 				}
 			}
+			ksort($return);
 			return $return;
 		}
 
-		
+		private function replaceShortcuts($query) {
+			//http://wiki.openstreetmap.org/wiki/Overpass_turbo/Extended_Overpass_Queries
+
+			preg_match_all('/\{\{(geocodeId|geocodeArea|geocodeBbox|geocodeCoords):(.*)\}\}/i', $query, $matches,PREG_SET_ORDER);
+			foreach($matches as $match) {
+				if(count($match) > 0) {
+					switch ($match[1]) {
+						case 'geocodeId':
+							$url = "http://nominatim.openstreetmap.org/search?q=".$match[2]."&format=json&limit=1";
+							$json = file_get_contents($url);
+							$json = json_decode($json);
+							$return = "relation(".($json[0]->osm_id).")";
+							$query = str_replace($match[0], $return, $query);
+							break;
+
+						case 'geocodeArea':
+							$url = "http://nominatim.openstreetmap.org/search?q=".$match[2]."&format=json&limit=1";
+							$json = file_get_contents($url);
+							$json = json_decode($json);
+							$return = "area(".($json[0]->osm_id + 3600000000).")";
+							$query = str_replace($match[0], $return, $query);
+							break;
+
+						case 'geocodeBbox':
+							$url = "http://nominatim.openstreetmap.org/search?q=".$match[2]."&format=json&limit=1";
+							$json = file_get_contents($url);
+							$json = json_decode($json);
+							$return = implode(',',$json[0]->boundingbox);
+							$query = str_replace($match[0], $return, $query);
+							break;
+
+						case 'geocodeCoords':
+							$url = "http://nominatim.openstreetmap.org/search?q=".$match[2]."&format=json&limit=1";
+							$json = file_get_contents($url);
+							$json = json_decode($json);
+							$return = $json[0]->lat.",".$json[0]->lon;
+							$query = str_replace($match[0], $return, $query);
+							break;
+
+						default:
+							# code...
+							break;
+					}
+				}
+			}
+			return $query;
+		}
  } 
 
 
