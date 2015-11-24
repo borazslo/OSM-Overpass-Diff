@@ -144,104 +144,134 @@ date_default_timezone_set('UTC');
 		}
 
 		function diff() {
-
+			$pois = array();
 			$rows = array();
 			
 			foreach($this->resultXML->{'action'} as $element) {
 				$row = array();
 
 				$action = (string) $element['type'];
-
 				if($action == 'create') $tmp = $element->children();
-				else $tmp = $element->new->children();
+				else $tmp = $element->new->children();				
 
-				foreach($tmp as $type => $node) {
-					$differents = array();
+				$differents = array();
+				$row['action'] = $action;
+				$row['type'] = key($tmp);;
+				foreach(array('id','lat','lon','version','timestamp','changeset','uid','user') as $key )
+					$row[$key] = (string) $tmp[0][$key];
 
-					$row['action'] = $action;
-					$row['type'] = $type;
-					foreach(array('id','lat','lon','version','timestamp','changeset','uid','user') as $key )
-						$row[$key] = (string) $node[$key];
+				$THEkey = strtotime((string) $row['timestamp'])."-".$row['type'].":".$row['id'];
 
-					if($row['timestamp'] == '') {
-						//echo "<pre>"; print_r($element);
-					}
-
-
-					$THEkey = strtotime((string) $node['timestamp'])."-".$row['type'].":".$row['id'];
-
-					if($action == 'delete') {
-						$new = array();
-						foreach( $element->old->children()[0]->{'tag'} as $tag) {
-							$tag = (array) $tag->attributes();
-							$tmp = $tag['@attributes'];
-							$new[$tmp['k']] = array('deleted',$tmp['v']);
-						}
-						$row['diff']['tags'] = $new;					
-					} else if($action == 'create') {
-						$new = array();
-						foreach( $element->children()[0]->{'tag'} as $tag) {
-							$tag = (array) $tag->attributes();
-							$tmp = $tag['@attributes'];
-							$new[$tmp['k']] = array('added',$tmp['v']);
-						}
-						$row['diff']['tags'] = $new;
-
-					} else if($action == 'modify') {
-						
-						//diff attributes
-						$old = (array) $element->old->children()[0]->attributes();
-						$old = $old['@attributes'];						
-						$new = (array) $element->new->children()[0]->attributes();
-						$new = $new['@attributes'];
-						$diff = $this->changes($old,$new);
-						foreach(array('version','timestamp','changeset','uid','user') as $key) {
-							unset($diff[$key]);
-						}
-						if(count($diff) > 0) $differents['attributes'] = $diff;
-
-
-						//diff tags
-						$old = array();
-						foreach( $element->old->children()[0]->{'tag'} as $tag) {
-							$tag = (array) $tag->attributes();
-							$tmp = $tag['@attributes'];
-							$old[$tmp['k']] = $tmp['v'];
-						}
-						$new = array();
-						foreach( $element->new->children()[0]->{'tag'} as $tag) {
-							$tag = (array) $tag->attributes();
-							$tmp = $tag['@attributes'];
-							$new[$tmp['k']] = $tmp['v'];
-						}
-						$diff = $this->changes($old,$new);
-						if(count($diff) > 0) $differents['tags'] = $diff;
-
-						//diff nds
-						$old = array();
-						foreach( $element->old->children()[0]->{'nd'} as $tag) {
-							$tag = (array) $tag->attributes();
-							$tmp = $tag['@attributes'];
-							if(isset($tmp['ref'])) $old[$tmp['ref']] = $tmp['ref'];
-						}
-						$new = array();
-						foreach( $element->new->children()[0]->{'nd'} as $tag) {
-							$tag = (array) $tag->attributes();
-							$tmp = $tag['@attributes'];
-							if(isset($tmp['ref'])) $new[$tmp['ref']] = $tmp['ref'];
-						}
-						$diff = $this->changes($old,$new);
-						if(count($diff) > 0) $differents['nds'] = $diff;
-
-						$row['diff'] = $differents;
-						
-					}
-
-					$rows[$THEkey] = $row;
-
+				//attributes
+				if($row['action'] != 'create') {
+					$old = (array) $element->old->children()[0];
+					$old = $old['@attributes'];
+					$new = (array) $element->new->children()[0];
+					$new = $new['@attributes'];
+				} else {
+					$old = array();			
+					$new = (array) $element->children()[0];
+					$new = $new['@attributes'];
 				}
+				$diff = $this->changes($old,$new);
+				if(count($diff) > 0) $differents['attributes'] = $diff;
+
+				//tags
+				$old = array(); $new = array();
+				if($row['action'] != 'create') {
+					foreach( $element->old->children()[0]->{'tag'} as $tag) {
+						$tag = (array) $tag->attributes();
+						$tag = $tag['@attributes'];						
+						$old[$tag['k']] = $tag['v'];						
+					}
+					foreach( $element->new->children()[0]->{'tag'} as $tag) {
+						$tag = (array) $tag->attributes();
+						$tag = $tag['@attributes'];						
+						$new[$tag['k']] = $tag['v'];
+					}
+				} else {
+					foreach( $element->children()[0]->{'tag'} as $tag) {
+						$tag = (array) $tag->attributes();
+						$tag = $tag['@attributes'];						
+						$new[$tag['k']] = $tag['v'];
+					}
+				}
+				$diff = $this->changes($old,$new);
+				if(count($diff) > 0) $differents['tag'] = $diff;
+		
+				//nds
+				$old = array(); $new = array();
+				if($row['action'] != 'create') {
+					foreach( $element->old->children()[0]->{'nd'} as $nd) {
+						$nd = (array) $nd->attributes();
+						$nd = $nd['@attributes'];						
+						if(isset($nd['ref'])) {
+							$old[$nd['ref']] = $nd['ref'];
+							$pois[] = "node:".$nd['ref'];
+						}
+					}
+					foreach( $element->new->children()[0]->{'nd'} as $nd) {
+						$nd = (array) $nd->attributes();
+						$nd = $nd['@attributes'];
+						if(isset($nd['ref'])) {
+							$new[$nd['ref']] = $nd['ref'];
+							$pois[] = "node:".$nd['ref'];
+						}
+					}
+				} else {
+					foreach( $element->children()[0]->{'nd'} as $nd) {
+						$nd = (array) $nd->attributes();
+						$nd = $nd['@attributes'];	
+						if(isset($nd['ref'])) {
+							$new[$nd['ref']] = $nd['ref'];
+							$pois[] = "node:".$nd['ref'];
+						}
+					}
+				}
+				$diff = $this->changes($old,$new);
+				if(count($diff) > 0) $differents['nd'] = $diff;
+
+				//members
+				$old = array(); $new = array();
+				if($row['action'] != 'create') {
+					foreach( $element->old->children()[0]->{'member'} as $member) {
+						$member = (array) $member->attributes();
+						$member = $member['@attributes'];						
+						if(isset($member['ref'])) {
+							$old[$member['type'].":".$member['ref']] = implode(':',$member);
+							$pois[] = $member['type'].":".$member['ref'];
+						}
+					}
+					foreach( $element->new->children()[0]->{'member'} as $member) {
+						$member = (array) $member->attributes();
+						$member = $member['@attributes'];
+						if(isset($member['ref'])) {
+							$new[$member['type'].":".$member['ref']] = implode(':',$member);
+							$pois[] = $member['type'].":".$member['ref'];
+						}
+					}
+				} else {
+					foreach( $element->children()[0]->{'member'} as $member) {
+						$member = (array) $member->attributes();
+						$member = $member['@attributes'];	
+						if(isset($member['ref'])) {
+							$new[$member['type'].":".$member['ref']] = implode(':',$member);
+							$pois[] = $member['type'].":".$member['ref'];
+						}
+					}
+				}
+				$diff = $this->changes($old,$new);
+				if(count($diff) > 0) $differents['member'] = $diff;
+
+				$row['diff'] = $differents;
+				$rows[$THEkey] = $row;				
 			}
 			krsort($rows);
+			foreach($rows as $key => $row) {
+				if(in_array($row['type'].":".$row['id'], $pois)) {
+					unset($rows[$key]);
+				}
+			}
 			return $rows;
 			
 

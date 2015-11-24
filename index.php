@@ -6,7 +6,18 @@
     <body>
 <?
 echo "<h1><a href='index.php'>OSM Diff</a></h1>";
-echo "<strong>Source and info: <a href='https://github.com/borazslo/OSM-Overpass-Diff'>https://github.com/borazslo/OSM-Overpass-Diff</a></strong><br/>";
+echo "<strong>Source and info: <a href='https://github.com/borazslo/OSM-Overpass-Diff'>https://github.com/borazslo/OSM-Overpass-Diff</a></strong>";
+//LoadModule status_module modules/mod_status.so
+//ExtendedStatus On
+@exec("apachectl fullstatus",$status);
+if(is_array($status) AND count($status) > 10) {
+	$c = 0;
+	foreach($status as $line) {
+		if(preg_match('/OverpassDiff/', $line)) $c++;
+	}
+	echo " (Running instances right now:".$c.")";
+}
+echo "<br/>";
 
 include 'OverpassDiff.php';
 
@@ -36,7 +47,7 @@ relation["wheelchair"](area.searchArea);
 );',
 );
 	$overpass->code = $codes[rand(0,1)];
-	//$overpass->code = $codes[0];
+	$overpass->code = $codes[0];
 }
 
 echo "<pre>";
@@ -97,7 +108,22 @@ if(count($rows) > 0) {
 			echo "<td>";
 			foreach($row['diff'] as $type => $diff) {
 				foreach($diff as $key => $value) {
-					if($type == 'nds') $key = 'node';
+					if($type !='attributes') {
+					if($type == 'nd') {
+						$key = '<i>nd</i>';
+						for($i = 1; $i <= 2; $i++)
+							if(isset($value[$i]))
+								$value[$i] = "<i><a href='http://www.openstreetmap.org/node/".$value[$i]."'>".$value[$i]."</a></i>";						
+					}
+					elseif($type == 'member') {
+						$key = '<i>member</i>';						
+						for($i = 1; $i <= 2; $i++) {
+							if(isset($value[$i])) {
+								$tmp = explode(':',$value[$i]);
+								$value[$i] = "<i><a href='http://www.openstreetmap.org/".$tmp[0]."/".$tmp[1]."'>".trim($value[$i],":")."</a></i>";
+							}
+						}
+					}
 					else {
 
 						if(array_key_exists("Key:".$key, $wikipages)) {						
@@ -119,11 +145,35 @@ if(count($rows) > 0) {
 					} elseif($value[0] == 'modified') {
 						echo "<font color='orange'>".$key."</font>=<font color='red'><strike>".$value[1]."</strike></font> <font color='green'>".$value[2]."</font><br/>";
 					}
+					}
 				}
 			}
+			//echo "<pre>".print_r($row,1)."</pre>";
+
 			echo "</td>";
 		
-			echo "<td><a href='http://www.openstreetmap.org/changeset/".$row['changeset']."'>".$row['timestamp']."</a> by <a href='http://www.openstreetmap.org/user/".$row['user']."'>".$row['user']."</a></td>";
+			echo "<td>";
+				if($row['action'] == 'modify') {
+					if(isset($row['diff']['attributes']['version'])) {
+					 	if($row['diff']['attributes']['version'][2] - $row['diff']['attributes']['version'][1] == 1) {
+							echo "<a href='http://www.openstreetmap.org/changeset/".$row['changeset']."'>".$row['timestamp']."</a> by <a href='http://www.openstreetmap.org/user/".$row['user']."'>".$row['user']."</a>";
+						} else {
+							echo "There were <a href='http://www.openstreetmap.org/".$row['type']."/".$row['id']."/history'>".($row['diff']['version'][2] - $row['diff']['version'][1])." revisions</a>.";
+						}
+					}
+				} 
+				elseif($row['action'] == 'create') {
+					if($row['version'] == 1) {
+						echo "<a href='http://www.openstreetmap.org/changeset/".$row['changeset']."'>".$row['timestamp']."</a> by <a href='http://www.openstreetmap.org/user/".$row['user']."'>".$row['user']."</a>";	
+					} else {
+						echo "<a href='http://www.openstreetmap.org/changeset/".$row['changeset']."'>".$row['timestamp']."</a>";	
+					}
+				}
+				else {
+					echo "<a href='http://www.openstreetmap.org/changeset/".$row['changeset']."'>".$row['timestamp']."</a> by <a href='http://www.openstreetmap.org/user/".$row['user']."'>".$row['user']."</a>";
+				}
+
+			echo "</td>";
 
 		echo "</tr>";
 	}
