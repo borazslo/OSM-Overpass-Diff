@@ -74,6 +74,11 @@ echo "<tr>
 	<th>last change</th>
 	</tr>";
 
+if(!file_exists('wikipages.json')) fopen('wikipages.json','w');
+$tmp = file_get_contents('wikipages.json');
+if($tmp != '' ) $wikipages = (array) json_decode($tmp);
+else $wikipages = array();
+
 $colors = array('create'=>'green','modify'=>'orange','delete'=>'red');
 foreach($rows as $row) {
 	echo "<tr  valign='top'>";
@@ -86,6 +91,20 @@ foreach($rows as $row) {
 		foreach($row['diff'] as $type => $diff) {
 			foreach($diff as $key => $value) {
 				if($type == 'nds') $key = 'node';
+				else {
+
+					if(array_key_exists("Key:".$key, $wikipages)) {						
+						if(isset($wikipages["Key:".$key]) AND $wikipages["Key:".$key] != false) {
+							$key = "<a href='http://wiki.openstreetmap.org/wiki/Key:".$key."' target='_blank'>".$key."</a>";	
+						}
+					} else {
+						if(checkWikipage("Key:".$key)) {
+							$wikipages["Key:".$key] = true;
+							$key = "<a href='http://wiki.openstreetmap.org/wiki/Key:".$key."' target='_blank'>".$key."</a>";	
+						} else 
+							$wikipages["Key:".$key] = false;
+					}
+				}
 				if($value[0] == 'deleted') {
 					echo "<font color='red'><strike>".$key."=".$value[1]."</strike></font><br/>";
 				} elseif($value[0] == 'added') {
@@ -102,12 +121,25 @@ foreach($rows as $row) {
 	echo "</tr>";
 }
 
+file_put_contents('wikipages.json', json_encode($wikipages));
+
 echo "</table>";
 if(isset($overpass->resultXML)) {
 	echo "<br/>".(string) $overpass->resultXML->note;
 	echo "<br/>Generated with ".$overpass->resultXML['generator']." ".$overpass->resultXML['version'];
 }
 
+function checkWikipage($title) {
+	if($json = file_get_contents("https://wiki.openstreetmap.org/w/api.php?action=query&titles=".$title."&format=json")) {
+		$json =json_decode($json);
+		foreach((array) $json->query->pages as $result => $page ) {
+			if($result > -1) {
+				return "http://wiki.openstreetmap.org/wiki/".$title;
+			}
+		}
+	}
+	return false;
+}
 
 
 ?>
