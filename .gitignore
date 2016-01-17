@@ -1,2 +1,4 @@
 tmp/*
 wikipages.json
+/nbproject
+/vendor

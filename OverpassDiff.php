@@ -30,7 +30,7 @@ date_default_timezone_set('UTC');
  		$return  = '[timeout:'.$this->timeout.']'."\n";
  		$return .= '[adiff:"'.date("Y-m-d\TH:i:00\Z",strtotime($this->dateOld)).'","'.date("Y-m-d\TH:i:00\Z",strtotime($this->dateNew)).'"];'."\n";
 		$return .= $code;
-		$return .= "\nout body meta;\n>;\nout meta skel qt;";
+                $return .= "\n out meta geom;";
 
 		$return = $this->replaceShortcuts($return);
 
@@ -53,6 +53,8 @@ date_default_timezone_set('UTC');
 	    $query = str_replace('/ /', '', $query);
 	    $query = urlencode($query);
 	    $url = $this->interpreter."?data=".$query;
+            $this->file = "tmp/osm_".md5($query);
+            $this->fullUrl = $url;
 	    $dir = 'tmp/';
 		if(!file_exists($dir)) mkdir($dir);
 

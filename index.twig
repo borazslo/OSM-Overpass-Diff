@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+        <title>OSM - adiff</title>
+
+        <!-- Bootstrap -->
+        <link href="vendor/twbs/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+
+        <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+        <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+        <!--[if lt IE 9]>
+          <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+          <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+        <![endif]-->
+    </head>
+    <body>
+        <div class="container" role="main">
+            <div class="page-header">
+                <h1>OSM Augmented Diff <small><a href="http://wiki.openstreetmap.org/wiki/Overpass_API/Augmented_Diffs">aka "adiff"</a></small></h1>
+            </div>
+            <div class="row">
+                Source and info: <a href='https://github.com/borazslo/OSM-Overpass-Diff'>github.com/borazslo/OSM-Overpass-Diff</a>; 
+                {% if runningInstances %}
+                    (Running instances right now: {{ runningInstances }} ); 
+                {% endif %}  
+                <a href="{{ xmlFile }}" target="_blank">xml file</a>; 
+                <a href="{{ achaviUrl }}" target="_blank">achavi map</a>;                 
+                <a href="http://localhost/achavi/?url=../osm-adiff/{{ xmlFile}}" target="_blank">local achavi map</a>
+            </div>
+            {% if alert %}
+                <div class="alert alert-{{ alert[1] }}" role="alert">
+                    {{ alert[0]|raw }}
+                </div>
+            {% endif %}
+            <div class="row">
+                <div class="col-md-6" style='background-color:rgba(0,0,0,0.1)'>
+                    <form action='index.php' method='get'>
+                        dateOld: <input name='dateOld' type='text' size='20' value='{{ input.dateOld}}'>
+                        dateNew: <input name='dateNew' type='text' size='20' value='{{ input.dateNew}}'>
+                        (Now: {{ now }})
+                        <textarea name='code' style='width:100%;height:150px;margin-top:4px;margin-bottom:4px;font-size:13px;overflow:auto;white-space:nowrap'>{{ input.code }}</textarea>
+                        timeout: <input name='timeout' type='text' size='4' value='{{ input.timeout }}'>
+                        <button style='float:right'>Run</button>
+                    </form>
+                </div>
+                <div class="col-md-6" style='background-color:rgba(0,0,0,0.1);overflow:auto;white-space:nowrap'>
+                    <small>{{ query|nl2br }}</small> 
+                </div>
+            </div>
+
+            {% if rows %}
+                <div class="row">
+                    <div class="col-md-12">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>type:id</th>
+                                    <th>action</th>
+                                    <th>details</th>
+                                    <th>last change</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in rows %}
+                                    <tr>
+                                        <td>{{ row.html.c }}</td>
+                                        <td>{{ row.html.typeId|raw }}</td>
+                                        <td>{{ row.html.action|raw }}</td>
+                                        <td>{{ row.html.details|raw }}</td>
+                                        <td>{{ row.html.lastChange|raw }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endif %}
+            {% if footer %}
+                <div class="row"><center><small>{{ footer|raw }}</small></center></div>                
+                        {% endif %}
+
+        </div>
+
+        <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+        <!-- Include all compiled plugins (below), or include individual files as needed -->
+        <script src="vendor/twbs/bootstrap/dist/js/bootstrap.min.js"></script>
+    </body>
+</html>

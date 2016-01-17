@@ -1,204 +1,170 @@
-<html>
-    <head>
-    	<meta charset="utf-8">
-    	<title>OSM Diff</title>
-    </head>
-    <body>
-<?
-echo "<h1><a href='index.php'>OSM Diff</a></h1>";
-echo "<strong>Source and info: <a href='https://github.com/borazslo/OSM-Overpass-Diff'>https://github.com/borazslo/OSM-Overpass-Diff</a></strong>";
-//LoadModule status_module modules/mod_status.so
-//ExtendedStatus On
-@exec("apachectl fullstatus",$status);
-if(is_array($status) AND count($status) > 10) {
-	$c = 0;
-	foreach($status as $line) {
-		if(preg_match('/OverpassDiff/', $line)) $c++;
-	}
-	echo " (Running instances right now:".$c.")";
+<?php
+
+define('PATH', dirname(__FILE__) . "/");
+if (!@include __DIR__ . '/vendor/autoload.php') {
+    die('You must set up the project dependencies, run the following commands:
+        wget http://getcomposer.org/composer.phar
+        php composer.phar install');
 }
-echo "<br/>";
+Twig_Autoloader::register();
+$loader = new Twig_Loader_Filesystem(PATH);
+$twig = new Twig_Environment($loader);
+
+include 'functions.php';
+
+$vars['runningInstances'] = countApacheRunningInstances('/OverpassDiff/');
+
+
 
 include 'OverpassDiff.php';
-
 $overpass = new OverpassDiff();
 
-if(isset($_REQUEST['timeout']))
-	$overpass->timeout = (int) $_REQUEST['timeout'];
-if(isset($_REQUEST['dateOld']))
-	$overpass->dateOld = date("Y-m-d H:i:s",strtotime($_REQUEST['dateOld']));
-if(isset($_REQUEST['dateNew']))
-	$overpass->dateNew = date("Y-m-d H:i:s",strtotime($_REQUEST['dateNew']));
-if(isset($_REQUEST['code'])) 
-	$overpass->code = $_REQUEST['code'];
+if (isset($_REQUEST['timeout']))
+    $overpass->timeout = (int) $_REQUEST['timeout'];
+if (isset($_REQUEST['dateOld']))
+    $overpass->dateOld = date("Y-m-d H:i:s", strtotime($_REQUEST['dateOld']));
+if (isset($_REQUEST['dateNew']))
+    $overpass->dateNew = date("Y-m-d H:i:s", strtotime($_REQUEST['dateNew']));
+if (isset($_REQUEST['code']))
+    $overpass->code = $_REQUEST['code'];
 else {
-	$codes = array(
-	 '{{geocodeArea:Hungary}}->.searchArea;
+    $codes = array(
+        '{{geocodeArea:Hungary}}->.searchArea;
 (
 node["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"catholic"](area.searchArea);
 way["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"catholic"](area.searchArea);
 relation["amenity"="place_of_worship"]["religion"="christian"]["denomination"~"catholic"](area.searchArea);
 );',
-	'{{geocodeArea:Hungary}}->.searchArea;
+        '{{geocodeArea:Hungary}}->.searchArea;
 (
 node["wheelchair"](area.searchArea);
 way["wheelchair"](area.searchArea);
 relation["wheelchair"](area.searchArea);
 );',
-);
-	$overpass->code = $codes[rand(0,1)];
-	$overpass->code = $codes[0];
+    );
+    $overpass->code = $codes[rand(0, 1)];
+    $overpass->code = $codes[0];
 }
 
-echo "<pre>";
-if($overpass->buildQuery()) {
-	if(count($_POST) > 0 OR count($_GET) OR 3 == 3) {
-		if($overpass->runQuery()) {
-			$rows = $overpass->diff();
-		} else {
-			echo "We could not recieve good answer from overpass api.";
-			echo "- <strong>".$overpass->lasterror."</strong>";
-			$rows = array();
-		}
-	} else
-		$rows = array();
+
+if ($overpass->buildQuery()) {
+    if (count($_POST) > 0 OR count($_GET) OR 3 == 3) {
+        if ($overpass->runQuery()) {
+            $rows = $overpass->diff();
+        } else {
+            $vars['alert'] = ["We could not recieve good answer from overpass api. - <strong><pre>" . $overpass->lasterror . "</pre></strong>", 'danger'];
+            $rows = array();
+        }
+    } else
+        $rows = array();
 } else {
-	echo "We could not build the Query. Sorry.";
-	echo "- <strong>".$overpass->lasterror."</strong>";
-	$rows = array();
-}
-echo "</pre>";
-
-echo "<div style='float:left;width:49%'>";
-	echo "<form action='".$_SERVER['PHP_SELF']."' method='get'>";
-	echo "dateOld: <input name='dateOld' type='text' size='20' value='".$overpass->dateOld."'>; ";
-	echo "dateNew: <input name='dateNew' type='text' size='20' value='".$overpass->dateNew."'> (Now: ".date('Y-m-d H:i:s').")<br/>";
-	echo "<textarea name='code' style='width:100%;height:150px;margin-top:4px;margin-bottom:4px;font-size:13px'>".$overpass->code."</textarea>";
-	echo "timeout: <input name='timeout' type='text' size='4' value='".$overpass->timeout."'>; ";
-	echo "<button style='float:right'>Run</button>";
-
-	echo "</form>";
-echo" </div>";
-
-echo "<div style='float:right;width:49%;margin:5px;padding:5px;overflow:auto;background-color:rgba(0,0,0,0.1)'><pre>".$overpass->query."</pre></div>";
-
-
-if(count($rows) > 0) {
-	echo "<table width='100%' border='1'>";
-	echo "<tr>
-		<th>type:id</th>
-		<th>action</th>
-		<th>details</th>
-		<th>last change</th>
-		</tr>";
-
-	if(!file_exists('wikipages.json')) fopen('wikipages.json','w');
-	$tmp = file_get_contents('wikipages.json');
-	if($tmp != '' ) $wikipages = (array) json_decode($tmp);
-	else $wikipages = array();
-
-	$colors = array('create'=>'green','modify'=>'orange','delete'=>'red');
-	foreach($rows as $row) {
-		echo "<tr  valign='top'>";
-			echo "<td><a href='http://www.openstreetmap.org/".$row['type']."/".$row['id']."'>".$row['type'].":".$row['id']."</a></td>";
-			
-			echo "<td><font color='".$colors[$row['action']]."'>".$row['action']."</font></td>";
-			
-		
-			echo "<td>";
-			foreach($row['diff'] as $type => $diff) {
-				foreach($diff as $key => $value) {
-					if($type !='attributes') {
-					if($type == 'nd') {
-						$key = '<i>nd</i>';
-						for($i = 1; $i <= 2; $i++)
-							if(isset($value[$i]))
-								$value[$i] = "<i><a href='http://www.openstreetmap.org/node/".$value[$i]."'>".$value[$i]."</a></i>";						
-					}
-					elseif($type == 'member') {
-						$key = '<i>member</i>';						
-						for($i = 1; $i <= 2; $i++) {
-							if(isset($value[$i])) {
-								$tmp = explode(':',$value[$i]);
-								$value[$i] = "<i><a href='http://www.openstreetmap.org/".$tmp[0]."/".$tmp[1]."'>".trim($value[$i],":")."</a></i>";
-							}
-						}
-					}
-					else {
-
-						if(array_key_exists("Key:".$key, $wikipages)) {						
-							if(isset($wikipages["Key:".$key]) AND $wikipages["Key:".$key] != false) {
-								$key = "<a href='http://wiki.openstreetmap.org/wiki/Key:".$key."' target='_blank'>".$key."</a>";	
-							}
-						} else {
-							if(checkWikipage("Key:".$key)) {
-								$wikipages["Key:".$key] = true;
-								$key = "<a href='http://wiki.openstreetmap.org/wiki/Key:".$key."' target='_blank'>".$key."</a>";	
-							} else 
-								$wikipages["Key:".$key] = false;
-						}
-					}
-					if($value[0] == 'deleted') {
-						echo "<font color='red'><strike>".$key."=".$value[1]."</strike></font><br/>";
-					} elseif($value[0] == 'added') {
-						echo "<font color='green'>".$key.="=".$value[1]."</font><br/>";
-					} elseif($value[0] == 'modified') {
-						echo "<font color='orange'>".$key."</font>=<font color='red'><strike>".$value[1]."</strike></font> <font color='green'>".$value[2]."</font><br/>";
-					}
-					}
-				}
-			}
-			//echo "<pre>".print_r($row,1)."</pre>";
-
-			echo "</td>";
-		
-			echo "<td>";
-				if($row['action'] == 'modify') {
-					if(isset($row['diff']['attributes']['version'])) {
-					 	if($row['diff']['attributes']['version'][2] - $row['diff']['attributes']['version'][1] == 1) {
-							echo "<a href='http://www.openstreetmap.org/changeset/".$row['changeset']."'>".$row['timestamp']."</a> by <a href='http://www.openstreetmap.org/user/".$row['user']."'>".$row['user']."</a>";
-						} else {
-							echo "There were <a href='http://www.openstreetmap.org/".$row['type']."/".$row['id']."/history'>".($row['diff']['version'][2] - $row['diff']['version'][1])." revisions</a>.";
-						}
-					}
-				} 
-				elseif($row['action'] == 'create') {
-					if($row['version'] == 1) {
-						echo "<a href='http://www.openstreetmap.org/changeset/".$row['changeset']."'>".$row['timestamp']."</a> by <a href='http://www.openstreetmap.org/user/".$row['user']."'>".$row['user']."</a>";	
-					} else {
-						echo "<a href='http://www.openstreetmap.org/changeset/".$row['changeset']."'>".$row['timestamp']."</a>";	
-					}
-				}
-				else {
-					echo "<a href='http://www.openstreetmap.org/changeset/".$row['changeset']."'>".$row['timestamp']."</a> by <a href='http://www.openstreetmap.org/user/".$row['user']."'>".$row['user']."</a>";
-				}
-
-			echo "</td>";
-
-		echo "</tr>";
-	}
-
-	file_put_contents('wikipages.json', json_encode($wikipages));
-
-	echo "</table>";
-	if(isset($overpass->resultXML)) {
-		echo "<br/>".(string) $overpass->resultXML->note;
-		echo "<br/>Generated with ".$overpass->resultXML['generator']." ".$overpass->resultXML['version'];
-	}
-
-}
-function checkWikipage($title) {
-	if($json = file_get_contents("https://wiki.openstreetmap.org/w/api.php?action=query&titles=".$title."&format=json")) {
-		$json =json_decode($json);
-		foreach((array) $json->query->pages as $result => $page ) {
-			if($result > -1) {
-				return "http://wiki.openstreetmap.org/wiki/".$title;
-			}
-		}
-	}
-	return false;
+    $vars['alert'] = ["We could not build the Query. Sorry. - <strong><pre>" . $overpass->lasterror . "</pre></strong>", 'danger'];
+    $rows = array();
 }
 
+$vars['achaviUrl'] = "http://overpass-api.de/achavi/?url=".urlencode($overpass->fullUrl);
+$vars['xmlFile'] = $overpass->file;
+$vars['now'] = date('Y-m-d H:i:s');
 
-?>
-</body></html>
+$vars['input']['dateOld'] = $overpass->dateOld;
+$vars['input']['dateNew'] = $overpass->dateNew;
+$vars['input']['code'] = $overpass->code;
+$vars['input']['timeout'] = $overpass->timeout;
+
+$vars['query'] = $overpass->query;
+
+
+
+if (count($rows) > 0) {
+    if (!file_exists('wikipages.json'))
+        fopen('wikipages.json', 'w');
+    $tmp = file_get_contents('wikipages.json');
+    if ($tmp != '')
+        $wikipages = (array) json_decode($tmp);
+    else
+        $wikipages = array();
+
+    $colors = array('create' => 'green', 'modify' => 'orange', 'delete' => 'red');
+    $c = 0;
+    foreach ($rows as &$row) {
+
+        $row['html']['c'] = $c++;
+        $row['html']['typeId'] = "<a href='http://www.openstreetmap.org/" . $row['type'] . "/" . $row['id'] . "'>" . $row['type'] . ":" . $row['id'] . "</a>";
+        $row['html']['action'] = "<font color='" . $colors[$row['action']] . "'>" . $row['action'] . "</font>";
+
+        $row['html']['details'] = '';
+        foreach ($row['diff'] as $type => $diff) {
+            foreach ($diff as $key => $value) {
+                if ($type != 'attributes') {
+                    if ($type == 'nd') {
+                        $key = '<i>nd</i>';
+                        for ($i = 1; $i <= 2; $i++)
+                            if (isset($value[$i]))
+                                $value[$i] = "<i><a href='http://www.openstreetmap.org/node/" . $value[$i] . "'>" . $value[$i] . "</a></i>";
+                    }
+                    elseif ($type == 'member') {
+                        $key = '<i>member</i>';
+                        for ($i = 1; $i <= 2; $i++) {
+                            if (isset($value[$i])) {
+                                $tmp = explode(':', $value[$i]);
+                                $value[$i] = "<i><a href='http://www.openstreetmap.org/" . $tmp[0] . "/" . $tmp[1] . "'>" . trim($value[$i], ":") . "</a></i>";
+                            }
+                        }
+                    } else {
+
+                        if (array_key_exists("Key:" . $key, $wikipages)) {
+                            if (isset($wikipages["Key:" . $key]) AND $wikipages["Key:" . $key] != false) {
+                                $key = "<a href='http://wiki.openstreetmap.org/wiki/Key:" . $key . "' target='_blank'>" . $key . "</a>";
+                            }
+                        } else {
+                            if (checkWikipage("Key:" . $key)) {
+                                $wikipages["Key:" . $key] = true;
+                                $key = "<a href='http://wiki.openstreetmap.org/wiki/Key:" . $key . "' target='_blank'>" . $key . "</a>";
+                            } else
+                                $wikipages["Key:" . $key] = false;
+                        }
+                    }
+                    if ($value[0] == 'deleted') {
+                        $row['html']['details'] .= "<font color='red'><strike>" . $key . "=" . $value[1] . "</strike></font><br/>";
+                    } elseif ($value[0] == 'added') {
+                        $row['html']['details'] .= "<font color='green'>" . $key.="=" . $value[1] . "</font><br/>";
+                    } elseif ($value[0] == 'modified') {
+                        $row['html']['details'] .= "<font color='orange'>" . $key . "</font>=<font color='red'><strike>" . $value[1] . "</strike></font> <font color='green'>" . $value[2] . "</font><br/>";
+                    }
+                }
+            }
+        }
+
+
+        $row['html']['lastChange'] = '';
+        if ($row['action'] == 'modify') {
+            if (isset($row['diff']['attributes']['version'])) {
+                if ($row['diff']['attributes']['version'][2] - $row['diff']['attributes']['version'][1] == 1) {
+                    $row['html']['lastChange'] .= "<a href='http://www.openstreetmap.org/changeset/" . $row['changeset'] . "'>" . $row['timestamp'] . "</a> by <a href='http://www.openstreetmap.org/user/" . $row['user'] . "'>" . $row['user'] . "</a>";
+                } elseif(isset($row['diff']['version'])) {
+                    $row['html']['lastChange'] .= "There were <a href='http://www.openstreetmap.org/" . $row['type'] . "/" . $row['id'] . "/history'>" . ($row['diff']['version'][2] - $row['diff']['version'][1]) . " revisions</a>.";
+                }
+            }
+        } elseif ($row['action'] == 'create') {
+            if ($row['version'] == 1) {
+                $row['html']['lastChange'] .= "<a href='http://www.openstreetmap.org/changeset/" . $row['changeset'] . "'>" . $row['timestamp'] . "</a> by <a href='http://www.openstreetmap.org/user/" . $row['user'] . "'>" . $row['user'] . "</a>";
+            } else {
+                $row['html']['lastChange'] .= "<a href='http://www.openstreetmap.org/changeset/" . $row['changeset'] . "'>" . $row['timestamp'] . "</a>";
+            }
+        } else {
+            $row['html']['lastChange'] .= "<a href='http://www.openstreetmap.org/changeset/" . $row['changeset'] . "'>" . $row['timestamp'] . "</a> by <a href='http://www.openstreetmap.org/user/" . $row['user'] . "'>" . $row['user'] . "</a>";
+        }
+    }
+
+    $vars['rows'] = $rows;
+
+    file_put_contents('wikipages.json', json_encode($wikipages));
+
+
+    if (isset($overpass->resultXML)) {
+        $vars['footer'] = (string) $overpass->resultXML->note;
+        $vars['footer'] .= "<br/>Generated with " . $overpass->resultXML['generator'] . " " . $overpass->resultXML['version'];
+    }
+}
+
+echo $twig->render('index.twig', $vars);
